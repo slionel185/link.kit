@@ -10,63 +10,73 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum MemberType {
-  PROSPECT
-  ACTIVE
-  INACTIVE
+enum UserRole {
+  USER
+  ADMIN
 }
 
-enum EmployeeAccess {
-  BASIC
-  MODERATOR
-  ADMINISTRATOR
-}
-
-enum EmployeeType {
-  SALES
-  TRAINING
-  BASIC
-  MANAGER
+model User {
+  id                    String                 @id @default(cuid())
+  name                  String?
+  email                 String?                @unique
+  password              String?
+  emailVerified         DateTime?
+  image                 String?
+  isTwoFactorEnabled    Boolean                @default(false)
+  twoFactorConfirmation TwoFactorConfirmation?
+  role                  UserRole               @default(USER)
+  accounts              Account[]
 }
 
 model Account {
-  id          String     @id @default(uuid())
-  name        String
-  email       String     @unique
-  password    String
-  member_type MemberType
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
 
-  email_verified Boolean? @default(false)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  created_at DateTime @default(now())
-  updated_at DateTime @default(now())
-
-  employee Employee?
+  @@unique([provider, providerAccountId])
 }
 
-model Employee {
-  id String @id @default(uuid())
+model VerificationToken {
+  id      String   @id @default(cuid())
+  email   String
+  token   String   @unique
+  expires DateTime
 
-  employee_type   EmployeeType
-  employee_access EmployeeAccess
-
-  account_id String  @unique
-  account    Account @relation(fields: [account_id], references: [id])
+  @@unique([email, token])
 }
 
-model Workout {
-  id   String @id @default(uuid())
-  name String
+model PasswordResetToken {
+  id      String   @id @default(cuid())
+  email   String
+  token   String   @unique
+  expires DateTime
 
-  exercises Exercise[]
+  @@unique([email, token])
 }
 
-model Exercise {
-  id          String  @id @default(uuid())
-  name        String
-  video       String?
-  description String?
+model TwoFactorToken {
+  id      String   @id @default(cuid())
+  email   String
+  token   String   @unique
+  expires DateTime
 
-  workout_id String
-  workout    Workout @relation(fields: [workout_id], references: [id])
+  @@unique([email, token])
+}
+
+model TwoFactorConfirmation {
+  id String @id @default(cuid())
+
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

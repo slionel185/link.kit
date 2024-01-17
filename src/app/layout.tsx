@@ -1,26 +1,25 @@
 import '@/app/globals.css'
 
-import type { Metadata } from 'next'
-import type { LayoutProps } from '@/types/LayoutProps'
+import type { Metadata, Viewport } from 'next'
 
-import { Inter } from 'next/font/google'
+import { GeistSans } from 'geist/font/sans'
+import { SessionProvider } from 'next-auth/react'
 
-import MainProvider from '@/components/providers/MainProvider'
+import { auth } from '@/utils/auth'
 
-const inter = Inter({ subsets: ['latin'] })
+export const metadata: Metadata = {}
+export const viewport: Viewport = {}
 
-export const metadata: Metadata = {
-    title: 'Titan Template',
-    description: 'Starter template for your Saas'
-}
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+    const session = await auth()
 
-export default function RootLayout({ children }: LayoutProps) {
     return (
         <html lang='en'>
-            <body className={inter.className}>
-                <MainProvider>
+            <head />
+            <body className={GeistSans.className}>
+                <SessionProvider session={session}>            
                     {children}
-                </MainProvider>
+                </SessionProvider>
             </body>
         </html>
     )

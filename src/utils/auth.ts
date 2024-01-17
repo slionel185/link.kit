@@ -1,27 +1,75 @@
-import type { AuthOptions } from 'next-auth'
+import type { DefaultSession } from 'next-auth'
+import type { User, UserRole } from '@prisma/client'
 
-import CredentialsProvider from 'next-auth/providers/credentials'
+import NextAuth from 'next-auth'
+import { PrismaAdapter } from '@auth/prisma-adapter'
 
-export const authOptions: AuthOptions = {
-    pages: {
-        signIn: '/auth/login'
-    },
-    providers: [
-        CredentialsProvider({
-            id: 'Titan-Credentials',
-            name: 'Titan-Credentials',
-            credentials: {
-                username: { type: 'text' },
-                password: { type: 'password' }
-            },
-            async authorize(credentials, req) {
-                if(!credentials?.username || !credentials?.password) return null
+import { db } from '@/utils/db'
+import { getUserById } from '@/data/user'
+import authConfig from '@/utils/auth-config'
+import { getTwoFactorConfirmationByUserId } from '@/data/two-factor-confirmation'
 
-                const user = { id: '1', username: credentials.username }
-                
-                if(user) return user
-                return null
-            },
-        })
-    ]
+declare module 'next-auth' {
+    interface Session {
+        user: User & DefaultSession['user']
+    }
 }
+
+
+export const {
+    handlers: { GET, POST },
+    auth,
+    signIn,
+    signOut
+} = NextAuth({
+    pages: {
+        signIn: '/auth/login',
+        error: '/auth/error'
+    },
+    callbacks: {
+        async signIn({ user, account }) {
+            // allow OAuth without email verification
+            if(account?.provider !== 'credentials') return true
+
+            const existingUser = await getUserById(user.id)
+            if(!existingUser?.emailVerified) return false
+
+            if(existingUser.isTwoFactorEnabled) {
+                const twoFactorConfimation = await getTwoFactorConfirmationByUserId(existingUser.id)
+
+                if(!twoFactorConfimation) {
+                    return false
+                }
+
+                await db.twoFactorConfirmation.delete({
+                    where: { id: twoFactorConfimation.id }
+                })
+            }
+
+            return true
+        },
+        async jwt({ token }) {
+            if(!token.sub) return token
+
+            const existingUser = await getUserById(token.sub)
+            if(!existingUser) return token
+
+            token.role = existingUser.role
+            return token
+        },
+        async session({ token, session }) {
+            if(token.sub && session.user) {
+                session.user.id = token.sub
+            }
+
+            if(token.role && session.user) {
+                session.user.role = token.role as UserRole
+            }
+
+            return session
+        }
+    },
+    adapter: PrismaAdapter(db),
+    session: { strategy: 'jwt' },
+    ...authConfig
+})
